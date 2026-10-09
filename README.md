@@ -1,3 +1,13 @@
+---
+title: Mafia Secret Card Distribution
+emoji: 🃏
+colorFrom: red
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Mafia Secret Card Distribution System (MVP)
 
 A clean, reliable, mobile-first secret role distribution system for in-person Mafia tabletop games and social gatherings.
