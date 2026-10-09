@@ -17,5 +17,9 @@ export default defineConfig({
         ws: true,
       }
     }
+  },
+  build: {
+    outDir: '../public',
+    emptyOutDir: true,
   }
 })

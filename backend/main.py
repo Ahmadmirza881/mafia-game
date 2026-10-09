@@ -74,6 +74,9 @@ class SPAStaticFiles(StaticFiles):
             raise ex
 
 frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
+if not os.path.exists(frontend_dist):
+    frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "public"))
+
 if os.path.exists(frontend_dist):
     app.mount("/", SPAStaticFiles(directory=frontend_dist, html=True), name="static")
 
