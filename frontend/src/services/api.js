@@ -14,7 +14,16 @@ async function request(url, options = {}) {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const errorMsg = data?.detail || data?.message || 'An unexpected error occurred.';
+    let errorMsg = 'An unexpected error occurred.';
+    if (typeof data?.detail === 'string') {
+      errorMsg = data.detail;
+    } else if (Array.isArray(data?.detail) && data.detail.length > 0) {
+      errorMsg = data.detail.map(d => d.msg || (typeof d === 'string' ? d : JSON.stringify(d))).join(', ');
+    } else if (data?.message) {
+      errorMsg = data.message;
+    } else if (response.statusText) {
+      errorMsg = `Server error: ${response.statusText} (${response.status})`;
+    }
     throw new Error(errorMsg);
   }
 

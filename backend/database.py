@@ -25,3 +25,31 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def ensure_schema():
+    """Ensure all required columns exist in SQLite tables across migrations."""
+    try:
+        with engine.connect() as conn:
+            raw_conn = conn.connection
+            cursor = raw_conn.cursor()
+            
+            cursor.execute("PRAGMA table_info(games)")
+            game_cols = [row[1] for row in cursor.fetchall()]
+            if game_cols:
+                if "host_email" not in game_cols:
+                    cursor.execute("ALTER TABLE games ADD COLUMN host_email VARCHAR(128)")
+                if "host_password_hash" not in game_cols:
+                    cursor.execute("ALTER TABLE games ADD COLUMN host_password_hash VARCHAR(128)")
+
+            cursor.execute("PRAGMA table_info(role_assignments)")
+            ra_cols = [row[1] for row in cursor.fetchall()]
+            if ra_cols:
+                if "is_revealed" not in ra_cols:
+                    cursor.execute("ALTER TABLE role_assignments ADD COLUMN is_revealed BOOLEAN DEFAULT 0")
+                if "revealed_at" not in ra_cols:
+                    cursor.execute("ALTER TABLE role_assignments ADD COLUMN revealed_at DATETIME")
+
+            raw_conn.commit()
+            cursor.close()
+    except Exception as e:
+        print(f"Schema check error: {e}")

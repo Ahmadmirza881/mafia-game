@@ -2,7 +2,7 @@ import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.database import engine, Base
+from backend.database import engine, Base, ensure_schema
 from backend.routes import games, players
 from backend.websocket_manager import manager
 
@@ -10,8 +10,9 @@ from backend.websocket_manager import manager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mafia_app")
 
-# Ensure all database tables exist
+# Ensure all database tables exist and have up-to-date schema
 Base.metadata.create_all(bind=engine)
+ensure_schema()
 
 app = FastAPI(
     title="Mafia Secret Card Distribution System",
