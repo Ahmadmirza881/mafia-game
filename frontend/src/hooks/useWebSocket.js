@@ -78,5 +78,57 @@ export function useWebSocket(gameCode, onMessage) {
     };
   }, [connect]);
 
+  // HTTP Polling fallback when WebSocket is disconnected or in serverless environments (e.g. Vercel)
+  useEffect(() => {
+    if (!gameCode || isConnected) return;
+
+    let isSubscribed = true;
+    let lastStatus = null;
+    let lastPlayerCount = -1;
+
+    const poll = async () => {
+      try {
+        const resp = await fetch(`/api/games/${encodeURIComponent(gameCode.toUpperCase())}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const game = data.game || data;
+        if (!isSubscribed || !game) return;
+
+        // Detect player join changes
+        if (game.joined_player_count !== undefined && game.joined_player_count !== lastPlayerCount) {
+          lastPlayerCount = game.joined_player_count;
+          if (onMessageRef.current) {
+            onMessageRef.current({
+              type: 'PLAYER_JOINED',
+              game,
+              joined_count: game.joined_player_count,
+            });
+          }
+        }
+
+        // Detect card distribution event
+        if (lastStatus && lastStatus !== 'DISTRIBUTED' && game.status === 'DISTRIBUTED') {
+          if (onMessageRef.current) {
+            onMessageRef.current({
+              type: 'DISTRIBUTION_COMPLETE',
+              total_players: game.required_players,
+            });
+          }
+        }
+        lastStatus = game.status;
+      } catch {
+        // Ignore background polling network glitches
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 1800);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
+  }, [gameCode, isConnected]);
+
   return { isConnected };
 }

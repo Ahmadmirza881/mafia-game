@@ -1,19 +1,34 @@
+import os
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = "sqlite:///./mafia_game.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./mafia_game.db")
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False}
-)
+# Normalize postgres URL to postgresql+psycopg for Neon / Supabase compatibility
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
-# Enable foreign keys for SQLite
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+# Configure engine based on database dialect
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False}
+    )
+
+    # Enable foreign keys for SQLite
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+else:
+    # PostgreSQL / Neon / Supabase
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -28,6 +43,8 @@ def get_db():
 
 def ensure_schema():
     """Ensure all required columns exist in SQLite tables across migrations."""
+    if not DATABASE_URL.startswith("sqlite"):
+        return
     try:
         with engine.connect() as conn:
             raw_conn = conn.connection
