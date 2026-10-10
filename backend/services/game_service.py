@@ -3,7 +3,13 @@ import secrets
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from backend.models import Game, Player, RoleConfiguration, RoleAssignment
-from backend.schemas import ROLE_METADATA, GamePublicResponse, PublicPlayer
+from backend.schemas import (
+    CLASSIC_ROLES,
+    ELITE_ROLES,
+    ROLE_METADATA,
+    GamePublicResponse,
+    PublicPlayer,
+)
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -19,7 +25,9 @@ def generate_game_code(db: Session) -> str:
             return code
 
 def format_game_response(game: Game) -> GamePublicResponse:
-    role_counts = {role: 0 for role in ROLE_METADATA.keys()}
+    mode = (getattr(game, "game_mode", None) or "CLASSIC").upper()
+    allowed_roles = CLASSIC_ROLES if mode == "CLASSIC" else ELITE_ROLES
+    role_counts = {role: 0 for role in allowed_roles}
     for rc in game.role_configurations:
         if rc.role_name in role_counts:
             role_counts[rc.role_name] = rc.quantity
@@ -34,6 +42,7 @@ def format_game_response(game: Game) -> GamePublicResponse:
 
     return GamePublicResponse(
         game_code=game.game_code,
+        game_mode=mode,
         required_players=game.required_players,
         joined_player_count=joined_count,
         status=game.status,
@@ -49,6 +58,7 @@ def create_game(
     roles: Dict[str, int],
     host_email: Optional[str] = None,
     host_password: Optional[str] = None,
+    game_mode: str = "CLASSIC",
 ) -> Tuple[Game, str]:
     game_code = generate_game_code(db)
     host_raw_token = secrets.token_urlsafe(32)
@@ -56,9 +66,11 @@ def create_game(
     
     clean_email = host_email.strip().lower() if host_email and host_email.strip() else None
     clean_pwd_hash = hash_token(host_password.strip()) if host_password and host_password.strip() else None
+    mode = "ELITE" if str(game_mode).upper() == "ELITE" else "CLASSIC"
 
     game = Game(
         game_code=game_code,
+        game_mode=mode,
         host_token_hash=host_token_hash,
         host_email=clean_email,
         host_password_hash=clean_pwd_hash,
@@ -68,7 +80,8 @@ def create_game(
     db.add(game)
     db.flush()
 
-    for role_name in ROLE_METADATA.keys():
+    allowed_roles = CLASSIC_ROLES if mode == "CLASSIC" else ELITE_ROLES
+    for role_name in allowed_roles:
         qty = max(0, roles.get(role_name, 0))
         config = RoleConfiguration(
             game_id=game.id,
@@ -132,8 +145,10 @@ def update_role_configurations(
             )
         game.required_players = required_players
 
+    mode = (getattr(game, "game_mode", None) or "CLASSIC").upper()
+    allowed_roles = CLASSIC_ROLES if mode == "CLASSIC" else ELITE_ROLES
     existing_configs = {rc.role_name: rc for rc in game.role_configurations}
-    for role_name in ROLE_METADATA.keys():
+    for role_name in allowed_roles:
         qty = max(0, roles.get(role_name, 0))
         if role_name in existing_configs:
             existing_configs[role_name].quantity = qty
@@ -154,6 +169,8 @@ def join_game(db: Session, game: Game, player_name: str) -> Tuple[Player, str]:
     if game.status != "WAITING":
         if game.status in ("DISTRIBUTING", "DISTRIBUTED"):
             raise ValueError("This game has already distributed its cards.")
+        if game.status == "CLOSED":
+            raise ValueError("This game room was closed by the host. Please create a new game or ask the host for the new code.")
         raise ValueError("Game is not currently accepting players.")
 
     if len(game.players) >= game.required_players:
@@ -185,5 +202,12 @@ def get_player_by_session(db: Session, session_token: str) -> Optional[Player]:
     return db.query(Player).filter(Player.session_token_hash == token_hash).first()
 
 def get_public_players(game: Game) -> List[PublicPlayer]:
-    # CRITICAL: Returns ONLY name and joined_at. NEVER roles!
-    return [PublicPlayer(name=p.name, joined_at=p.joined_at) for p in game.players]
+    # CRITICAL: Returns ONLY name, joined_at, and is_alive. NEVER roles!
+    return [
+        PublicPlayer(
+            name=p.name,
+            joined_at=p.joined_at,
+            is_alive=getattr(p, 'is_alive', True)
+        )
+        for p in game.players
+    ]

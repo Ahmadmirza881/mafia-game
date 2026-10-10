@@ -57,6 +57,8 @@ def ensure_schema():
                     cursor.execute("ALTER TABLE games ADD COLUMN host_email VARCHAR(128)")
                 if "host_password_hash" not in game_cols:
                     cursor.execute("ALTER TABLE games ADD COLUMN host_password_hash VARCHAR(128)")
+                if "game_mode" not in game_cols:
+                    cursor.execute("ALTER TABLE games ADD COLUMN game_mode VARCHAR(20) DEFAULT 'CLASSIC'")
 
             cursor.execute("PRAGMA table_info(role_assignments)")
             ra_cols = [row[1] for row in cursor.fetchall()]
@@ -65,6 +67,12 @@ def ensure_schema():
                     cursor.execute("ALTER TABLE role_assignments ADD COLUMN is_revealed BOOLEAN DEFAULT 0")
                 if "revealed_at" not in ra_cols:
                     cursor.execute("ALTER TABLE role_assignments ADD COLUMN revealed_at DATETIME")
+
+            cursor.execute("PRAGMA table_info(players)")
+            player_cols = [row[1] for row in cursor.fetchall()]
+            if player_cols:
+                if "is_alive" not in player_cols:
+                    cursor.execute("ALTER TABLE players ADD COLUMN is_alive BOOLEAN DEFAULT 1")
 
             raw_conn.commit()
             cursor.close()

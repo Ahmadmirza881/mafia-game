@@ -9,6 +9,8 @@ from backend.schemas import (
     JoinGameResponse,
     PlayerRoleResponse,
     ROLE_METADATA,
+    ROLE_METADATA_CLASSIC,
+    ROLE_METADATA_ELITE,
 )
 from backend.services.game_service import (
     format_game_response,
@@ -103,17 +105,34 @@ def api_get_my_role(
             detail="No role assigned to this player."
         )
 
-    role_meta = ROLE_METADATA.get(assignment.role_name, {
+    mode = (getattr(game, "game_mode", None) or "CLASSIC").upper()
+    if mode == "ELITE":
+        role_dict = ROLE_METADATA_ELITE
+        card_back = "/elite-card-back.jpg"
+    else:
+        role_dict = ROLE_METADATA_CLASSIC
+        card_back = "/card-back.jpg"
+
+    role_meta = role_dict.get(assignment.role_name, ROLE_METADATA.get(assignment.role_name, {
         "display_name": assignment.role_name.capitalize(),
-        "icon": "❓",
-        "description": "Role information not found."
-    })
+        "icon": "♠",
+        "description": "Role information not found.",
+        "team": "Town",
+        "special_ability": None,
+        "card_image": None
+    }))
 
     return PlayerRoleResponse(
         role=assignment.role_name,
         display_name=role_meta["display_name"],
-        icon=role_meta["icon"],
+        icon=role_meta.get("icon", "♠"),
         description=role_meta["description"],
         player_name=player.name,
-        game_code=game.game_code
+        game_code=game.game_code,
+        game_mode=mode,
+        team=role_meta.get("team"),
+        special_ability=role_meta.get("special_ability"),
+        card_image=role_meta.get("card_image"),
+        card_back_image=card_back,
+        is_alive=getattr(player, "is_alive", True)
     )

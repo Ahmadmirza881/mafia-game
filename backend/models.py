@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint, Boolean
 from sqlalchemy.orm import relationship
 from backend.database import Base
 
@@ -12,6 +12,7 @@ class Game(Base):
     host_email = Column(String(128), nullable=True)
     host_password_hash = Column(String(128), nullable=True)
     required_players = Column(Integer, nullable=False, default=5)
+    game_mode = Column(String(20), nullable=False, default="CLASSIC")  # CLASSIC, ELITE
     status = Column(String(20), nullable=False, default="WAITING")  # WAITING, DISTRIBUTING, DISTRIBUTED, CLOSED
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     distributed_at = Column(DateTime, nullable=True)
@@ -29,6 +30,7 @@ class Player(Base):
     name = Column(String(64), nullable=False)
     session_token_hash = Column(String(64), index=True, nullable=False)
     joined_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    is_alive = Column(Boolean, default=True, nullable=False)
 
     game = relationship("Game", back_populates="players")
     role_assignment = relationship("RoleAssignment", back_populates="player", uselist=False, cascade="all, delete-orphan")

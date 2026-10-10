@@ -79,3 +79,38 @@ def distribute_roles(db: Session, game: Game) -> Dict:
         game.status = "WAITING"
         db.commit()
         raise e
+
+
+def reset_game_for_rematch(db: Session, game: Game) -> Dict:
+    """
+    Resets a completed/distributed game room back to 'WAITING' for a new round (rematch).
+    - Persistent Game Code: Code and room remain exactly the same.
+    - Player Persistence: Joined players and session tokens stay intact.
+    - Clears previous role assignments.
+    - Resets game status to 'WAITING'.
+    """
+    if game.status == "CLOSED":
+        raise ValueError("Cannot rematch a closed game room.")
+
+    # Delete existing role assignments
+    db.query(RoleAssignment).filter(RoleAssignment.game_id == game.id).delete()
+
+    # Revive all players for the new round
+    for p in game.players:
+        p.is_alive = True
+
+    game.status = "WAITING"
+    game.distributed_at = None
+    db.commit()
+    db.refresh(game)
+
+    joined_count = len(game.players)
+
+    return {
+        "success": True,
+        "message": f"Rematch initiated. All {joined_count} players remain in room {game.game_code}.",
+        "status": "WAITING",
+        "total_players": joined_count,
+        "game_code": game.game_code
+    }
+

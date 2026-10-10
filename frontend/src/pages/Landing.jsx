@@ -66,6 +66,19 @@ export function Landing({ onNavigate }) {
           </div>
         </div>
 
+        {/* Dual Mode Showcase Strip */}
+        <div className="landing-modes-strip">
+          <div className="mode-strip-item classic">
+            <span className="mode-strip-badge">♠ MAFIA CLASSIC</span>
+            <span className="mode-strip-text">Traditional 4 Roles</span>
+          </div>
+          <div className="mode-strip-divider">VS</div>
+          <div className="mode-strip-item elite">
+            <span className="mode-strip-badge gold">👑 MAFIA ELITE</span>
+            <span className="mode-strip-text">+ Godfather, Jester & Mayor</span>
+          </div>
+        </div>
+
         {/* Button 1: CREATE GAME (Crimson Gradient) */}
         <button
           type="button"
@@ -103,25 +116,6 @@ export function Landing({ onNavigate }) {
           </div>
           <span className="button-spade-icon">♠</span>
         </button>
-
-        {/* Bottom Host Login Link with Left and Right Lines */}
-        <div className="host-login-divider-row">
-          <span className="host-divider-line left" />
-          <button
-            type="button"
-            className="btn-host-login-exact"
-            onClick={() => onNavigate('host-login')}
-          >
-            <span className="host-icon" style={{ display: 'flex', alignItems: 'center' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            </span>
-            <span>Host Login (Re-open Room)</span>
-          </button>
-          <span className="host-divider-line right" />
-        </div>
       </div>
     </div>
   );

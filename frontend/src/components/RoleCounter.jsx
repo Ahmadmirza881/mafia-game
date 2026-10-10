@@ -1,14 +1,17 @@
 import React from 'react';
+import { sounds } from '../utils/soundEffects';
 
 export function RoleCounter({ label, icon, value, min = 0, max = 50, onChange, disabled = false }) {
   const handleDecrement = () => {
     if (value > min && !disabled) {
+      sounds.playClick();
       onChange(value - 1);
     }
   };
 
   const handleIncrement = () => {
     if (value < max && !disabled) {
+      sounds.playClick();
       onChange(value + 1);
     }
   };

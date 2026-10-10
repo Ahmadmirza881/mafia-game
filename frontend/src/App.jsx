@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Landing } from './pages/Landing';
 import { CreateGame } from './pages/CreateGame';
 import { HostLobby } from './pages/HostLobby';
@@ -13,43 +13,115 @@ export default function App() {
   const [playerData, setPlayerData] = useState(null); // { game, playerName, sessionToken }
   const [joinCodeParam, setJoinCodeParam] = useState('');
 
-  // Check URL query parameters and local session storage on initial mount
-  useEffect(() => {
-    // 1. Check for ?join=CODE in URL
-    const params = new URLSearchParams(window.location.search);
-    const joinCode = params.get('join') || params.get('code');
-    if (joinCode) {
-      setJoinCodeParam(joinCode.toUpperCase());
-      setView('join');
-      return;
+  // Update browser address bar to show distinct URL for each screen
+  const updateBrowserUrl = useCallback((targetView, code = '') => {
+    let path = '/';
+    if (targetView === 'create') {
+      path = '/create';
+    } else if (targetView === 'join') {
+      path = code ? `/join?code=${encodeURIComponent(code)}` : '/join';
+    } else if (targetView === 'host-lobby') {
+      path = code ? `/host?code=${encodeURIComponent(code)}` : '/host';
+    } else if (targetView === 'player-screen') {
+      path = code ? `/player?code=${encodeURIComponent(code)}` : '/player';
+    } else if (targetView === 'host-login') {
+      path = '/host-login';
+    } else {
+      path = '/';
     }
 
-    // 2. Check for saved host session
-    try {
-      const savedHost = sessionStorage.getItem('mafia_host_session');
-      if (savedHost) {
-        const parsed = JSON.parse(savedHost);
-        if (parsed?.game && parsed?.hostToken) {
-          setHostData(parsed);
-          setView('host-lobby');
-          return;
-        }
-      }
-
-      // 3. Check for saved player session
-      const savedPlayer = sessionStorage.getItem('mafia_player_session');
-      if (savedPlayer) {
-        const parsed = JSON.parse(savedPlayer);
-        if (parsed?.game && parsed?.sessionToken) {
-          setPlayerData(parsed);
-          setView('player-screen');
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to restore session from storage:', e);
+    if (window.location.pathname + window.location.search !== path) {
+      window.history.pushState({ view: targetView }, '', path);
     }
   }, []);
+
+  // Navigate helper that updates both view state and URL
+  const navigateTo = useCallback((newView, code = '') => {
+    setView(newView);
+    if (code) setJoinCodeParam(code);
+    updateBrowserUrl(newView, code);
+  }, [updateBrowserUrl]);
+
+  // Initial mount: inspect URL and tab-specific sessionStorage
+  useEffect(() => {
+    // Clean up any old global localStorage that caused tabs to clash on localhost
+    try {
+      localStorage.removeItem('mafia_host_session');
+      localStorage.removeItem('mafia_player_session');
+    } catch {}
+
+    const pathname = window.location.pathname.toLowerCase();
+    const params = new URLSearchParams(window.location.search);
+    const codeInUrl = params.get('join') || params.get('code') || '';
+
+    // Check tab-specific session storage
+    let savedHost = null;
+    let savedPlayer = null;
+    try {
+      const h = sessionStorage.getItem('mafia_host_session');
+      if (h) savedHost = JSON.parse(h);
+      const p = sessionStorage.getItem('mafia_player_session');
+      if (p) savedPlayer = JSON.parse(p);
+    } catch (e) {
+      console.warn('Session parse error:', e);
+    }
+
+    // Determine starting view based on distinct URL path
+    if (pathname === '/create') {
+      setView('create');
+    } else if (pathname === '/join' || codeInUrl) {
+      if (codeInUrl) setJoinCodeParam(codeInUrl.toUpperCase());
+      setView('join');
+    } else if (pathname === '/host') {
+      if (savedHost?.game && savedHost?.hostToken) {
+        setHostData(savedHost);
+        setView('host-lobby');
+      } else {
+        setView('landing');
+        window.history.replaceState({}, '', '/');
+      }
+    } else if (pathname === '/player') {
+      if (savedPlayer?.game && savedPlayer?.sessionToken) {
+        setPlayerData(savedPlayer);
+        setView('player-screen');
+      } else {
+        setView('join');
+        window.history.replaceState({}, '', codeInUrl ? `/join?code=${codeInUrl}` : '/join');
+      }
+    } else if (savedHost?.game && savedHost?.hostToken) {
+      setHostData(savedHost);
+      setView('host-lobby');
+      updateBrowserUrl('host-lobby', savedHost.game.game_code);
+    } else if (savedPlayer?.game && savedPlayer?.sessionToken) {
+      setPlayerData(savedPlayer);
+      setView('player-screen');
+      updateBrowserUrl('player-screen', savedPlayer.game.game_code);
+    } else {
+      setView('landing');
+      if (pathname !== '/') {
+        window.history.replaceState({}, '', '/');
+      }
+    }
+
+    // Listen to browser Back and Forward navigation buttons
+    const handlePopState = () => {
+      const p = window.location.pathname.toLowerCase();
+      const q = new URLSearchParams(window.location.search);
+      const c = q.get('join') || q.get('code') || '';
+
+      if (p === '/create') setView('create');
+      else if (p === '/join') {
+        if (c) setJoinCodeParam(c.toUpperCase());
+        setView('join');
+      }
+      else if (p === '/host') setView('host-lobby');
+      else if (p === '/player') setView('player-screen');
+      else setView('landing');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [updateBrowserUrl]);
 
   // Host creates game
   const handleGameCreated = (game, hostToken) => {
@@ -59,6 +131,7 @@ export default function App() {
       sessionStorage.setItem('mafia_host_session', JSON.stringify(session));
     } catch (e) {}
     setView('host-lobby');
+    updateBrowserUrl('host-lobby', game.game_code);
   };
 
   // Player joins game
@@ -69,6 +142,7 @@ export default function App() {
       sessionStorage.setItem('mafia_player_session', JSON.stringify(session));
     } catch (e) {}
     setView('player-screen');
+    updateBrowserUrl('player-screen', game.game_code);
   };
 
   // Exit Host lobby
@@ -77,7 +151,7 @@ export default function App() {
       sessionStorage.removeItem('mafia_host_session');
     } catch (e) {}
     setHostData(null);
-    setView('landing');
+    navigateTo('landing');
   };
 
   // Leave game (Player)
@@ -86,7 +160,7 @@ export default function App() {
       sessionStorage.removeItem('mafia_player_session');
     } catch (e) {}
     setPlayerData(null);
-    setView('landing');
+    navigateTo('landing');
   };
 
   return (
@@ -102,13 +176,13 @@ export default function App() {
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {view === 'landing' && (
           <Landing
-            onNavigate={(screen) => setView(screen)}
+            onNavigate={(screen) => navigateTo(screen)}
           />
         )}
 
         {view === 'create' && (
           <CreateGame
-            onBack={() => setView('landing')}
+            onBack={() => navigateTo('landing')}
             onGameCreated={handleGameCreated}
           />
         )}
@@ -124,14 +198,14 @@ export default function App() {
         {view === 'join' && (
           <JoinGame
             defaultGameCode={joinCodeParam}
-            onBack={() => setView('landing')}
+            onBack={() => navigateTo('landing')}
             onJoined={handlePlayerJoined}
           />
         )}
 
         {view === 'host-login' && (
           <HostLogin
-            onBack={() => setView('landing')}
+            onBack={() => navigateTo('landing')}
             onHostLoggedIn={handleGameCreated}
           />
         )}

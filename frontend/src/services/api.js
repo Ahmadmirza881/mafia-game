@@ -31,11 +31,12 @@ async function request(url, options = {}) {
 }
 
 export const api = {
-  createGame: (requiredPlayers, roles, hostEmail = null, hostPassword = null) =>
+  createGame: (requiredPlayers, roles, hostEmail = null, hostPassword = null, gameMode = 'CLASSIC') =>
     request('/api/games', {
       method: 'POST',
       body: JSON.stringify({
         required_players: requiredPlayers,
+        game_mode: gameMode,
         roles,
         host_email: hostEmail?.trim() || null,
         host_password: hostPassword?.trim() || null,
@@ -86,5 +87,37 @@ export const api = {
     request(`/api/games/${encodeURIComponent(gameCode)}/close`, {
       method: 'POST',
       headers: { 'X-Host-Token': hostToken },
+    }),
+
+  rematch: (gameCode, hostToken) =>
+    request(`/api/games/${encodeURIComponent(gameCode)}/rematch`, {
+      method: 'POST',
+      headers: { 'X-Host-Token': hostToken },
+    }),
+
+  kickPlayer: (gameCode, playerName, hostToken) =>
+    request(`/api/games/${encodeURIComponent(gameCode)}/players/${encodeURIComponent(playerName)}`, {
+      method: 'DELETE',
+      headers: { 'X-Host-Token': hostToken },
+    }),
+
+  eliminatePlayer: (gameCode, playerName, hostToken, reason = 'VOTED_OUT') =>
+    request(`/api/games/${encodeURIComponent(gameCode)}/players/${encodeURIComponent(playerName)}/eliminate`, {
+      method: 'POST',
+      headers: { 'X-Host-Token': hostToken },
+      body: JSON.stringify({ reason }),
+    }),
+
+  revivePlayer: (gameCode, playerName, hostToken) =>
+    request(`/api/games/${encodeURIComponent(gameCode)}/players/${encodeURIComponent(playerName)}/revive`, {
+      method: 'POST',
+      headers: { 'X-Host-Token': hostToken },
+    }),
+
+  investigatePlayer: (gameCode, targetPlayerName, playerToken) =>
+    request(`/api/games/${encodeURIComponent(gameCode)}/investigate`, {
+      method: 'POST',
+      headers: { 'X-Player-Token': playerToken },
+      body: JSON.stringify({ target_player_name: targetPlayerName }),
     }),
 };
