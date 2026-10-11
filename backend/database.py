@@ -55,39 +55,48 @@ def get_db():
         db.close()
 
 def ensure_schema():
-    """Ensure all required columns exist in SQLite tables across migrations."""
-    if not DATABASE_URL.startswith("sqlite"):
-        return
+    """Ensure all required columns exist in tables across migrations (both SQLite and PostgreSQL)."""
     try:
-        with engine.connect() as conn:
-            raw_conn = conn.connection
-            cursor = raw_conn.cursor()
-            
-            cursor.execute("PRAGMA table_info(games)")
-            game_cols = [row[1] for row in cursor.fetchall()]
-            if game_cols:
-                if "host_email" not in game_cols:
-                    cursor.execute("ALTER TABLE games ADD COLUMN host_email VARCHAR(128)")
-                if "host_password_hash" not in game_cols:
-                    cursor.execute("ALTER TABLE games ADD COLUMN host_password_hash VARCHAR(128)")
-                if "game_mode" not in game_cols:
-                    cursor.execute("ALTER TABLE games ADD COLUMN game_mode VARCHAR(20) DEFAULT 'CLASSIC'")
+        from sqlalchemy import text
+        if DATABASE_URL.startswith("sqlite"):
+            with engine.connect() as conn:
+                raw_conn = conn.connection
+                cursor = raw_conn.cursor()
+                
+                cursor.execute("PRAGMA table_info(games)")
+                game_cols = [row[1] for row in cursor.fetchall()]
+                if game_cols:
+                    if "host_email" not in game_cols:
+                        cursor.execute("ALTER TABLE games ADD COLUMN host_email VARCHAR(128)")
+                    if "host_password_hash" not in game_cols:
+                        cursor.execute("ALTER TABLE games ADD COLUMN host_password_hash VARCHAR(128)")
+                    if "game_mode" not in game_cols:
+                        cursor.execute("ALTER TABLE games ADD COLUMN game_mode VARCHAR(20) DEFAULT 'CLASSIC'")
 
-            cursor.execute("PRAGMA table_info(role_assignments)")
-            ra_cols = [row[1] for row in cursor.fetchall()]
-            if ra_cols:
-                if "is_revealed" not in ra_cols:
-                    cursor.execute("ALTER TABLE role_assignments ADD COLUMN is_revealed BOOLEAN DEFAULT 0")
-                if "revealed_at" not in ra_cols:
-                    cursor.execute("ALTER TABLE role_assignments ADD COLUMN revealed_at DATETIME")
+                cursor.execute("PRAGMA table_info(role_assignments)")
+                ra_cols = [row[1] for row in cursor.fetchall()]
+                if ra_cols:
+                    if "is_revealed" not in ra_cols:
+                        cursor.execute("ALTER TABLE role_assignments ADD COLUMN is_revealed BOOLEAN DEFAULT 0")
+                    if "revealed_at" not in ra_cols:
+                        cursor.execute("ALTER TABLE role_assignments ADD COLUMN revealed_at DATETIME")
 
-            cursor.execute("PRAGMA table_info(players)")
-            player_cols = [row[1] for row in cursor.fetchall()]
-            if player_cols:
-                if "is_alive" not in player_cols:
-                    cursor.execute("ALTER TABLE players ADD COLUMN is_alive BOOLEAN DEFAULT 1")
+                cursor.execute("PRAGMA table_info(players)")
+                player_cols = [row[1] for row in cursor.fetchall()]
+                if player_cols:
+                    if "is_alive" not in player_cols:
+                        cursor.execute("ALTER TABLE players ADD COLUMN is_alive BOOLEAN DEFAULT 1")
 
-            raw_conn.commit()
-            cursor.close()
+                raw_conn.commit()
+                cursor.close()
+        else:
+            # PostgreSQL (Neon / Supabase)
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE games ADD COLUMN IF NOT EXISTS host_email VARCHAR(128);"))
+                conn.execute(text("ALTER TABLE games ADD COLUMN IF NOT EXISTS host_password_hash VARCHAR(128);"))
+                conn.execute(text("ALTER TABLE games ADD COLUMN IF NOT EXISTS game_mode VARCHAR(20) DEFAULT 'CLASSIC';"))
+                conn.execute(text("ALTER TABLE role_assignments ADD COLUMN IF NOT EXISTS is_revealed BOOLEAN DEFAULT FALSE;"))
+                conn.execute(text("ALTER TABLE role_assignments ADD COLUMN IF NOT EXISTS revealed_at TIMESTAMP;"))
+                conn.execute(text("ALTER TABLE players ADD COLUMN IF NOT EXISTS is_alive BOOLEAN DEFAULT TRUE;"))
     except Exception as e:
         print(f"Schema check error: {e}")
