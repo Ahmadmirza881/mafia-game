@@ -33,6 +33,7 @@ router = APIRouter(prefix="/api/games", tags=["games"])
 
 
 @router.post("", response_model=CreateGameResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=CreateGameResponse, status_code=status.HTTP_201_CREATED)
 def api_create_game(req: CreateGameRequest, db: Session = Depends(get_db)):
     game, host_token = create_game(
         db,

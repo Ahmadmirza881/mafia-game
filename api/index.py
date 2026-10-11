@@ -1,20 +1,23 @@
 import sys
 import os
-from fastapi import Request
+from urllib.parse import parse_qs, urlencode
 
 # Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from backend.main import app
+from backend.main import app as fastapi_app
 
-@app.api_route("/api/index.py", methods=["GET", "POST"])
-@app.api_route("/index.py", methods=["GET", "POST"])
-@app.api_route("/api/debug-info", methods=["GET", "POST"])
-@app.api_route("/debug-info", methods=["GET", "POST"])
-def get_debug_info(request: Request):
-    return {
-        "url": str(request.url),
-        "path": request.url.path,
-        "scope_path": request.scope.get("path"),
-        "headers": dict(request.headers),
-    }
+async def app(scope, receive, send):
+    if scope["type"] == "http":
+        # Extract query string and look for __path injected by Vercel rewrite
+        query_string = scope.get("query_string", b"").decode()
+        if "__path=" in query_string:
+            params = parse_qs(query_string, keep_blank_values=True)
+            if "__path" in params and params["__path"]:
+                target_path = params.pop("__path")[0]
+                scope["path"] = target_path
+                scope["raw_path"] = target_path.encode()
+                # Rebuild remaining query parameters without __path
+                flat_params = {k: v[0] if len(v) == 1 else v for k, v in params.items()}
+                scope["query_string"] = urlencode(flat_params, doseq=True).encode()
+    await fastapi_app(scope, receive, send)
