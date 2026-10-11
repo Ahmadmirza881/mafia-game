@@ -2,7 +2,15 @@ import os
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-if os.environ.get("VERCEL"):
+is_serverless = bool(
+    os.environ.get("VERCEL")
+    or os.environ.get("VERCEL_ENV")
+    or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+    or os.environ.get("LAMBDA_TASK_ROOT")
+    or not os.access(".", os.W_OK)
+)
+
+if is_serverless:
     default_db = "sqlite:////tmp/mafia_game.db"
 else:
     default_db = "sqlite:///./mafia_game.db"

@@ -35,6 +35,9 @@ router = APIRouter(prefix="/api/games", tags=["games"])
 @router.post("", response_model=CreateGameResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=CreateGameResponse, status_code=status.HTTP_201_CREATED)
 def api_create_game(req: CreateGameRequest, db: Session = Depends(get_db)):
+    from backend.database import Base, engine, ensure_schema
+    Base.metadata.create_all(bind=engine)
+    ensure_schema()
     game, host_token = create_game(
         db,
         req.required_players,

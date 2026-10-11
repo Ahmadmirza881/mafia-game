@@ -20,6 +20,19 @@ app = FastAPI(
     version="1.0.0"
 )
 
+import traceback
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc()
+    logger.error(f"Unhandled server error on {request.url.path}: {exc}\n{tb}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Server Error: {str(exc)}", "traceback": tb}
+    )
+
 # Enable CORS for local dev and network devices
 app.add_middleware(
     CORSMiddleware,
