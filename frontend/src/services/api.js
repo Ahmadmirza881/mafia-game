@@ -19,10 +19,14 @@ async function request(url, options = {}) {
       errorMsg = data.detail;
     } else if (Array.isArray(data?.detail) && data.detail.length > 0) {
       errorMsg = data.detail.map(d => d.msg || (typeof d === 'string' ? d : JSON.stringify(d))).join(', ');
-    } else if (data?.message) {
+    } else if (typeof data?.message === 'string') {
       errorMsg = data.message;
+    } else if (typeof data?.error?.message === 'string') {
+      errorMsg = data.error.message;
     } else if (response.statusText) {
       errorMsg = `Server error: ${response.statusText} (${response.status})`;
+    } else if (response.status) {
+      errorMsg = `Request failed (HTTP ${response.status})`;
     }
     throw new Error(errorMsg);
   }
