@@ -2,7 +2,12 @@ import os
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./mafia_game.db")
+if os.environ.get("VERCEL"):
+    default_db = "sqlite:////tmp/mafia_game.db"
+else:
+    default_db = "sqlite:///./mafia_game.db"
+
+DATABASE_URL = os.environ.get("DATABASE_URL", default_db)
 
 # Normalize postgres URL to postgresql+psycopg for Neon / Supabase compatibility
 if DATABASE_URL.startswith("postgres://"):
