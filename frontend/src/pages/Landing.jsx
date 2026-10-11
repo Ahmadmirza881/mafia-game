@@ -66,17 +66,11 @@ export function Landing({ onNavigate }) {
           </div>
         </div>
 
-        {/* Dual Mode Showcase Strip */}
-        <div className="landing-modes-strip">
-          <div className="mode-strip-item classic">
-            <span className="mode-strip-badge">♠ MAFIA CLASSIC</span>
-            <span className="mode-strip-text">Traditional 4 Roles</span>
-          </div>
-          <div className="mode-strip-divider">VS</div>
-          <div className="mode-strip-item elite">
-            <span className="mode-strip-badge gold">👑 MAFIA ELITE</span>
-            <span className="mode-strip-text">+ Godfather, Jester & Mayor</span>
-          </div>
+        {/* Cinematic Mafia Homepage Quote */}
+        <div className="landing-quote-strip">
+          <span className="landing-quote-line left" />
+          <p className="landing-quote-text">“Trust No One. Fear Everyone.”</p>
+          <span className="landing-quote-line right" />
         </div>
 
         {/* Button 1: CREATE GAME (Crimson Gradient) */}

@@ -63,6 +63,8 @@ class RoleAssignment(Base):
     player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     role_name = Column(String(32), nullable=False)
     assigned_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    is_revealed = Column(Boolean, default=False, nullable=True)
+    revealed_at = Column(DateTime, nullable=True)
 
     game = relationship("Game", back_populates="role_assignments")
     player = relationship("Player", back_populates="role_assignment")

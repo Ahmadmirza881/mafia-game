@@ -129,7 +129,7 @@ export default function App() {
     setHostData(session);
     try {
       sessionStorage.setItem('mafia_host_session', JSON.stringify(session));
-    } catch (e) {}
+    } catch {}
     setView('host-lobby');
     updateBrowserUrl('host-lobby', game.game_code);
   };
@@ -140,7 +140,7 @@ export default function App() {
     setPlayerData(session);
     try {
       sessionStorage.setItem('mafia_player_session', JSON.stringify(session));
-    } catch (e) {}
+    } catch {}
     setView('player-screen');
     updateBrowserUrl('player-screen', game.game_code);
   };
@@ -149,7 +149,7 @@ export default function App() {
   const handleHostExit = () => {
     try {
       sessionStorage.removeItem('mafia_host_session');
-    } catch (e) {}
+    } catch {}
     setHostData(null);
     navigateTo('landing');
   };
@@ -158,15 +158,15 @@ export default function App() {
   const handlePlayerLeave = () => {
     try {
       sessionStorage.removeItem('mafia_player_session');
-    } catch (e) {}
+    } catch {}
     setPlayerData(null);
     navigateTo('landing');
   };
 
   return (
     <div className="app-wrapper">
-      {/* Header (displayed on inner pages; Landing page contains its own full-size hero logo) */}
-      {view !== 'landing' && (
+      {/* Header (displayed on inner pages; Landing & Create pages contain their own dedicated hero layout) */}
+      {view !== 'landing' && view !== 'create' && (
         <header className="app-header">
           <MafiaLogo size="compact" />
         </header>

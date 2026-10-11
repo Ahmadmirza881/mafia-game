@@ -846,6 +846,67 @@ def test_mayor_metadata_and_elite_mechanics(client):
     assert mayor["card_image"] == "/elite-mayor-card.jpg"
 
 
+def test_town_trial_elimination_and_verdict(client):
+    """Eliminating players through Town Trial returns correct mafia status, living counts, and win state."""
+    resp = client.post("/api/games", json={
+        "required_players": 4,
+        "roles": {"MAFIA": 1, "CITIZEN": 3, "DETECTIVE": 0, "DOCTOR": 0}
+    })
+    game_code = resp.json()["game"]["game_code"]
+    host_token = resp.json()["host_token"]
+
+    players = ["Alice", "Bob", "Charlie", "David"]
+    tokens = {}
+    for p in players:
+        join_resp = client.post(f"/api/games/{game_code}/join", json={"player_name": p}).json()
+        tokens[p] = join_resp["session_token"]
+
+    client.post(f"/api/games/{game_code}/distribute", headers={"X-Host-Token": host_token})
+
+    # Find who is the mafia and who is citizen
+    mafia_name = None
+    citizen_names = []
+    for p, tok in tokens.items():
+        role = client.get("/api/me/role", headers={"X-Player-Token": tok}).json()["role"]
+        if role == "MAFIA":
+            mafia_name = p
+        else:
+            citizen_names.append(p)
+
+    assert mafia_name is not None
+    assert len(citizen_names) == 3
+
+    # 1. Eliminate an innocent citizen first
+    c1 = citizen_names[0]
+    elim1 = client.post(
+        f"/api/games/{game_code}/players/{c1}/eliminate",
+        json={"reason": "VOTED_OUT"},
+        headers={"X-Host-Token": host_token}
+    ).json()
+
+    assert elim1["success"] is True
+    assert elim1["is_mafia"] is False
+    assert elim1["living_mafia_count"] == 1
+    assert elim1["game_over"] is False
+    assert "MAFIA STILL ALIVE" in elim1["announcement"]
+
+    # 2. Eliminate the Mafia player next -> Town wins!
+    elim_mafia = client.post(
+        f"/api/games/{game_code}/players/{mafia_name}/eliminate",
+        json={"reason": "VOTED_OUT"},
+        headers={"X-Host-Token": host_token}
+    ).json()
+
+    assert elim_mafia["success"] is True
+    assert elim_mafia["is_mafia"] is True
+    assert elim_mafia["living_mafia_count"] == 0
+    assert elim_mafia["game_over"] is True
+    assert elim_mafia["winner"] == "TOWN"
+    assert "MAFIA OUT HO GAYA!" in elim_mafia["announcement"]
+    assert "Town Citizens WIN THE GAME!" in elim_mafia["announcement"]
+
+
+
 
 
 

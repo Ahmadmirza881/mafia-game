@@ -24,11 +24,17 @@ def override_get_db():
     finally:
         db.close()
 
-app.dependency_overrides[get_db] = override_get_db
-Base.metadata.create_all(bind=engine)
+@pytest.fixture(autouse=True)
+def setup_test_db():
+    app.dependency_overrides[get_db] = override_get_db
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
+    app.dependency_overrides.pop(get_db, None)
+
 client = TestClient(app)
 
-def run_dual_mode_simulation():
+def test_dual_mode_simulation():
     print("\n" + "=" * 60)
     print("RUNNING COMPLETE MAFIA CLASSIC + MAFIA ELITE SIMULATION")
     print("=" * 60)
@@ -210,4 +216,4 @@ def run_dual_mode_simulation():
     print("=" * 60 + "\n")
 
 if __name__ == "__main__":
-    run_dual_mode_simulation()
+    test_dual_mode_simulation()

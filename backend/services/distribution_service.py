@@ -102,6 +102,7 @@ def reset_game_for_rematch(db: Session, game: Game) -> Dict:
     game.status = "WAITING"
     game.distributed_at = None
     db.commit()
+    db.expire(game, ['role_assignments'])
     db.refresh(game)
 
     joined_count = len(game.players)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { api } from '../services/api';
 
 export function JoinGame({ onBack, onJoined, defaultGameCode = '' }) {
@@ -8,16 +8,16 @@ export function JoinGame({ onBack, onJoined, defaultGameCode = '' }) {
     return code.toUpperCase().replace(/^MAFIA-?/, '').trim();
   };
 
+  const [prevDefaultCode, setPrevDefaultCode] = useState(defaultGameCode);
   const [codeSuffix, setCodeSuffix] = useState(() => extractSuffix(defaultGameCode));
   const [playerName, setPlayerName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (defaultGameCode) {
-      setCodeSuffix(extractSuffix(defaultGameCode));
-    }
-  }, [defaultGameCode]);
+  if (defaultGameCode !== prevDefaultCode) {
+    setPrevDefaultCode(defaultGameCode);
+    setCodeSuffix(extractSuffix(defaultGameCode));
+  }
 
   const handleCodeChange = (e) => {
     const raw = e.target.value;

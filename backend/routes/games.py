@@ -236,6 +236,7 @@ async def api_kick_player(
 
     db.delete(target_player)
     db.commit()
+    db.expire(game, ['players'])
     db.refresh(game)
 
     # Broadcast to all connected clients
@@ -276,11 +277,57 @@ async def api_eliminate_player(
     db.commit()
 
     elim_reason = req.reason if req else "VOTED_OUT"
-    target_role = target_player.role_assignment.role_name if target_player.role_assignment else None
+    target_role = target_player.role_assignment.role_name if target_player.role_assignment else "CIVILIAN"
     mode = (game.game_mode or "CLASSIC").upper()
 
     # Jester Rule: If voted out by the town in Mafia Elite, Jester wins independently!
     is_jester_victory = (mode == "ELITE" and target_role == "JESTER" and elim_reason == "VOTED_OUT")
+
+    # Living player counts by faction
+    living_players = [p for p in game.players if getattr(p, "is_alive", True)]
+    living_mafia_count = sum(
+        1 for p in living_players
+        if p.role_assignment and p.role_assignment.role_name in ("MAFIA", "GODFATHER")
+    )
+    living_town_count = sum(
+        1 for p in living_players
+        if p.role_assignment and p.role_assignment.role_name not in ("MAFIA", "GODFATHER", "JESTER")
+    )
+
+    is_mafia = target_role in ("MAFIA", "GODFATHER")
+    game_over = False
+    winner = None
+
+    if is_jester_victory:
+        game_over = True
+        winner = "JESTER"
+        announcement = f"🎭 JESTER SOLO VICTORY! {target_player.name} was the Jester and was voted out by the Town!"
+    elif living_mafia_count == 0:
+        game_over = True
+        winner = "TOWN"
+        announcement = f"🏆 MAFIA OUT HO GAYA! All Mafia have been eliminated. Town Citizens WIN THE GAME!"
+    elif living_mafia_count >= living_town_count and living_town_count > 0:
+        game_over = True
+        winner = "MAFIA"
+        announcement = f"💀 MAFIA WINS! The Syndicate has overtaken the Town."
+    else:
+        if is_mafia:
+            announcement = f"🔥 MAFIA OUT HO GAYA! {target_player.name} was MAFIA! MAFIA STILL ALIVE: {living_mafia_count} Mafia remaining in the shadows."
+        else:
+            announcement = f"⚰️ {target_player.name} was innocent ({target_role})! MAFIA STILL ALIVE: {living_mafia_count} Mafia remaining in the shadows."
+
+    trial_event_data = {
+        "type": "TOWN_TRIAL_RESULT",
+        "player_name": target_player.name,
+        "role": target_role,
+        "is_mafia": is_mafia,
+        "elimination_reason": elim_reason,
+        "living_mafia_count": living_mafia_count,
+        "living_town_count": living_town_count,
+        "game_over": game_over,
+        "winner": winner,
+        "announcement": announcement,
+    }
 
     # Broadcast status update
     await manager.broadcast(game.game_code, {
@@ -291,11 +338,14 @@ async def api_eliminate_player(
         "is_jester_victory": is_jester_victory,
     })
 
+    # Broadcast trial verdict and Mafia survival intel to all players
+    await manager.broadcast(game.game_code, trial_event_data)
+
     if is_jester_victory:
         await manager.broadcast(game.game_code, {
             "type": "JESTER_VICTORY",
             "player_name": target_player.name,
-            "message": f"🎭 {target_player.name} (The Jester) has been voted out and achieved an independent victory!"
+            "message": announcement
         })
 
     return {
@@ -305,6 +355,13 @@ async def api_eliminate_player(
         "is_alive": False,
         "elimination_reason": elim_reason,
         "jester_victory": is_jester_victory,
+        "role": target_role,
+        "is_mafia": is_mafia,
+        "living_mafia_count": living_mafia_count,
+        "living_town_count": living_town_count,
+        "game_over": game_over,
+        "winner": winner,
+        "announcement": announcement,
     }
 
 

@@ -12,6 +12,8 @@ export function useWebSocket(gameCode, onMessage) {
     onMessageRef.current = onMessage;
   }, [onMessage]);
 
+  const connectRef = useRef(null);
+
   const connect = useCallback(() => {
     if (!gameCode) return;
 
@@ -52,7 +54,9 @@ export function useWebSocket(gameCode, onMessage) {
         if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
         // Auto-reconnect after 2.5 seconds if still active
         reconnectTimeoutRef.current = setTimeout(() => {
-          connect();
+          if (connectRef.current) {
+            connectRef.current();
+          }
         }, 2500);
       };
 
@@ -64,6 +68,10 @@ export function useWebSocket(gameCode, onMessage) {
       console.error('Failed to create WebSocket:', e);
     }
   }, [gameCode]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     connect();

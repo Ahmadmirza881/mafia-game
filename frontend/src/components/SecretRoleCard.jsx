@@ -4,6 +4,8 @@ import { sounds } from '../utils/soundEffects';
 export function SecretRoleCard({ roleInfo }) {
   // Start face-down (showing the backside) for privacy and maximum suspense
   const [isRevealed, setIsRevealed] = useState(false);
+  const [cardImgError, setCardImgError] = useState(false);
+  const [backImgError, setBackImgError] = useState(false);
 
   if (!roleInfo) return null;
 
@@ -144,12 +146,20 @@ export function SecretRoleCard({ roleInfo }) {
         <div className="card-flip-inner">
           {/* BACK FACE (Default Face-down state) */}
           <div className={`card-flip-face card-flip-back ${isElite ? 'card-flip-back-elite' : ''}`}>
-            <img
-              src={activeCardBack}
-              alt="Secret Card Back"
-              className="card-flip-img"
-              loading="eager"
-            />
+            {!backImgError ? (
+              <img
+                src={activeCardBack}
+                alt="Secret Card Back"
+                className="card-flip-img"
+                loading="eager"
+                onError={() => setBackImgError(true)}
+              />
+            ) : (
+              <div className="card-flip-fallback-content">
+                <div className="role-emblem">♠</div>
+                <div className="role-title-badge">MAFIA CARD</div>
+              </div>
+            )}
             <div className="card-face-overlay">
               <span className={`card-pulse-chip ${isElite ? 'chip-elite' : ''}`}>
                 {isElite ? '👑 TAP TO REVEAL 👑' : '♠ TAP TO REVEAL ♠'}
@@ -159,12 +169,13 @@ export function SecretRoleCard({ roleInfo }) {
 
           {/* FRONT FACE (Revealed state: Illustrated Role Card) */}
           <div className={`card-flip-face card-flip-front ${roleClass} ${isElite ? 'card-flip-front-elite' : ''}`}>
-            {cardImage ? (
+            {cardImage && !cardImgError ? (
               <img
                 src={cardImage}
                 alt={`${display_name} Secret Card`}
                 className="card-flip-img"
                 loading="eager"
+                onError={() => setCardImgError(true)}
               />
             ) : (
               <div className="card-flip-fallback-content">

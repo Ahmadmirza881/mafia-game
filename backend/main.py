@@ -73,11 +73,12 @@ class SPAStaticFiles(StaticFiles):
                 return await super().get_response("index.html", scope)
             raise ex
 
-frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
-if not os.path.exists(frontend_dist):
-    frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "public"))
+# Serve frontend static files if built (Vite outputs to ../public)
+frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "public"))
+if not os.path.exists(os.path.join(frontend_dist, "index.html")):
+    frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
 
-if os.path.exists(frontend_dist):
+if os.path.exists(frontend_dist) and os.path.exists(os.path.join(frontend_dist, "index.html")):
     app.mount("/", SPAStaticFiles(directory=frontend_dist, html=True), name="static")
 
 

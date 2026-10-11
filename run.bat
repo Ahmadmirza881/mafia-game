@@ -30,11 +30,11 @@ echo ===================================================
 echo   APPLICATION RUNNING SUCCESSFULLY!
 echo ===================================================
 echo   💻 Computer (Local) : http://localhost:5173
-echo   📱 Mobile Phone     : http://192.168.100.72:5173
-echo   📡 Backend API      : http://0.0.0.0:8000
+echo   📱 Mobile Phone     : http://%LOCAL_IP%:5173
+echo   📡 Backend API      : http://%LOCAL_IP%:8000
 echo ===================================================
 echo   NOTE: Phone aur Computer same Wi-Fi par hone chahiye!
 echo   Players apne phone browser mein yeh link open karein:
-echo   http://192.168.100.72:5173
+echo   http://%LOCAL_IP%:5173
 echo ===================================================
 pause >nul

@@ -15,14 +15,17 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 def generate_game_code(db: Session) -> str:
-    # Generates human-friendly format MAFIA-4821 avoiding ambiguous characters
+    # Generates human-friendly format MAFIA-4821 avoiding ambiguous characters (0, 1)
     digits = "23456789"
-    while True:
-        num = "".join(secrets.choice(digits) for _ in range(4))
-        code = f"MAFIA-{num}"
-        existing = db.query(Game).filter(Game.game_code == code).first()
-        if not existing:
-            return code
+    for length in (4, 5, 6):
+        for _ in range(50):
+            num = "".join(secrets.choice(digits) for _ in range(length))
+            code = f"MAFIA-{num}"
+            existing = db.query(Game).filter(Game.game_code == code).first()
+            if not existing:
+                return code
+    # Fallback to high-entropy 6-character alphanumeric code
+    return f"MAFIA-{secrets.token_hex(3).upper()}"
 
 def format_game_response(game: Game) -> GamePublicResponse:
     mode = (getattr(game, "game_mode", None) or "CLASSIC").upper()
@@ -192,6 +195,8 @@ def join_game(db: Session, game: Game, player_name: str) -> Tuple[Player, str]:
     db.add(player)
     db.commit()
     db.refresh(player)
+    db.expire(game, ['players'])
+    db.refresh(game)
 
     return player, session_token
 

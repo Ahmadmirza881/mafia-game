@@ -92,10 +92,11 @@ export function HostLobby({ initialGame, hostToken, onExit }) {
   // Jester Victory Celebration State
   const [jesterVictoryData, setJesterVictoryData] = useState(null);
 
-  // Town Trial Vote Calculator state
-  const [voterTally, setVoterTally] = useState({});
+  // Town Trial Target Voting & Verdict state
+  const [trialVotes, setTrialVotes] = useState({});
   const [mayorClaimants, setMayorClaimants] = useState({});
-  const [showVoteTool, setShowVoteTool] = useState(false);
+  const [showVoteTool, setShowVoteTool] = useState(true);
+  const [trialVerdictData, setTrialVerdictData] = useState(null);
 
   const isElite = (game.game_mode || '').toUpperCase() === 'ELITE';
 
@@ -156,7 +157,8 @@ export function HostLobby({ initialGame, hostToken, onExit }) {
       setIsDistributing(false);
       setDistributionResult(null);
       setJesterVictoryData(null);
-      setVoterTally({});
+      setTrialVerdictData(null);
+      setTrialVotes({});
       setMayorClaimants({});
       if (data.game) {
         setGame(data.game);
@@ -172,6 +174,11 @@ export function HostLobby({ initialGame, hostToken, onExit }) {
     } else if (data.type === 'PLAYER_KICKED') {
       refreshPlayers();
       if (data.game) setGame(data.game);
+    } else if (data.type === 'TOWN_TRIAL_RESULT') {
+      sounds.playDramaticReveal();
+      setTrialVerdictData(data);
+      setTrialVotes({});
+      refreshPlayers();
     } else if (data.type === 'PLAYER_STATUS_UPDATED') {
       refreshPlayers();
     } else if (data.type === 'JESTER_VICTORY') {
@@ -371,29 +378,69 @@ export function HostLobby({ initialGame, hostToken, onExit }) {
     }
   };
 
-  // Town Trial Vote calculations
+  // Town Trial Target-Based Voting calculations
   const alivePlayers = players.filter((p) => p.is_alive !== false);
-  const totalVotesCast = Object.entries(voterTally).reduce((acc, [name, voted]) => {
-    if (!voted) return acc;
-    const weight = isElite && mayorClaimants[name] ? 2 : 1;
-    return acc + weight;
-  }, 0);
+  const totalVotesCast = Object.values(trialVotes).reduce((a, b) => a + b, 0);
   const majorityThreshold = Math.floor(alivePlayers.length / 2) + 1;
 
-  const toggleVote = (name) => {
-    sounds.playClick();
-    setVoterTally((prev) => ({ ...prev, [name]: !prev[name] }));
+  const handleExecuteTrialVote = async (targetName) => {
+    if (!targetName || isEliminating) return;
+    setIsEliminating(true);
+    try {
+      const resp = await api.eliminatePlayer(game.game_code, targetName, hostToken, 'VOTED_OUT');
+      sounds.playDramaticReveal();
+      setTrialVotes({});
+      setTrialVerdictData(resp);
+      refreshPlayers();
+    } catch (err) {
+      alert(err.message || 'Failed to eliminate player.');
+    } finally {
+      setIsEliminating(false);
+    }
   };
 
-  const toggleMayorClaim = (name) => {
+  const handleVoteChange = (playerName, delta) => {
     sounds.playClick();
-    setMayorClaimants((prev) => ({ ...prev, [name]: !prev[name] }));
+    const cur = trialVotes[playerName] || 0;
+    const nextVal = Math.max(0, cur + delta);
+    setTrialVotes((prev) => ({ ...prev, [playerName]: nextVal }));
+
+    // Auto-eliminate player if majority threshold is reached!
+    if (delta > 0 && nextVal >= majorityThreshold && !isEliminating) {
+      handleExecuteTrialVote(playerName);
+    }
   };
 
-  const resetVotes = () => {
+  const handleMayorVoteAdd = (playerName) => {
     sounds.playClick();
-    setVoterTally({});
+    const cur = trialVotes[playerName] || 0;
+    const nextVal = cur + 2;
+    setTrialVotes((prev) => ({ ...prev, [playerName]: nextVal }));
+
+    // Auto-eliminate player if majority threshold is reached!
+    if (nextVal >= majorityThreshold && !isEliminating) {
+      handleExecuteTrialVote(playerName);
+    }
   };
+
+  const toggleMayorClaim = (playerName) => {
+    sounds.playClick();
+    setMayorClaimants((prev) => ({ ...prev, [playerName]: !prev[playerName] }));
+  };
+
+  const handleResetVotes = () => {
+    sounds.playClick();
+    setTrialVotes({});
+  };
+
+  // Find the leading suspect with the highest vote count
+  const leadingSuspect = alivePlayers.reduce((best, p) => {
+    const v = trialVotes[p.name] || 0;
+    if (v > 0 && v > (best ? (trialVotes[best.name] || 0) : 0)) {
+      return p;
+    }
+    return best;
+  }, null);
 
   const remainingPlayers = game.required_players - joinedCount;
   const activeAllowedKeys = isElite
@@ -792,13 +839,13 @@ export function HostLobby({ initialGame, hostToken, onExit }) {
             </div>
           )}
 
-          {/* TOWN TRIAL VOTE CALCULATOR (Moderator Tool during in-person play) */}
+          {/* TOWN TRIAL TARGET VOTING & ELIMINATION SYSTEM */}
           {game.status === 'DISTRIBUTED' && (
             <div className={`card ${isElite ? 'card-elite-border' : ''}`} style={{ marginTop: '1rem' }}>
               <div className="card-header" style={{ marginBottom: '0.6rem' }}>
                 <div className="card-title" style={{ fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>⚖ Town Trial Vote Assistant</span>
-                  {isElite && <span className="mode-pill-elite" style={{ fontSize: '0.7rem' }}>Mayor 2x Vote Weight</span>}
+                  <span>⚖ Town Trial Live Voting & Elimination</span>
+                  {isElite && <span className="mode-pill-elite" style={{ fontSize: '0.7rem' }}>Mayor 2x Vote Power</span>}
                 </div>
                 <button
                   type="button"
@@ -811,37 +858,113 @@ export function HostLobby({ initialGame, hostToken, onExit }) {
               </div>
 
               {showVoteTool && (
-                <div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                    Tally votes during day trials. {isElite ? 'In Mafia Elite, tag the revealed Mayor to count their vote as 2!' : 'Each vote adds 1.'}
+                <div className="trial-voting-container">
+                  <div className="trial-majority-banner">
+                    <div>
+                      Majority to Eliminate: <strong className="trial-majority-badge">{majorityThreshold} Votes</strong>
+                    </div>
+                    <div>
+                      <span>Living Citizens: </span>
+                      <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>{alivePlayers.length}</strong>
+                    </div>
+                  </div>
+
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Click <strong>+</strong> or <strong>-</strong> on any player to cast votes. When a suspect hits <strong>{majorityThreshold} votes</strong>, eliminate them to reveal if Mafia was eliminated!
                   </p>
 
-                  <div className="vote-calculator-grid">
-                    {alivePlayers.map((p) => {
-                      const isVoted = !!voterTally[p.name];
+                  <div className="trial-suspects-grid">
+                    {alivePlayers.map((p, idx) => {
+                      const votes = trialVotes[p.name] || 0;
+                      const hasVotes = votes > 0;
+                      const isThresholdReached = votes >= majorityThreshold;
                       const isClaimingMayor = isElite && !!mayorClaimants[p.name];
-                      return (
-                        <div key={p.name} className={`vote-tally-item ${isVoted ? 'is-voted' : ''}`}>
-                          <button
-                            type="button"
-                            className={`vote-btn-pill ${isVoted ? 'is-active' : ''}`}
-                            onClick={() => toggleVote(p.name)}
-                          >
-                            <span className="vote-check">{isVoted ? '✓' : '+'}</span>
-                            <span className="vote-name">{p.name}</span>
-                            <span className="vote-weight-pill">
-                              {isClaimingMayor ? '+2' : '+1'}
-                            </span>
-                          </button>
+                      const progressPct = Math.min(100, (votes / Math.max(1, majorityThreshold)) * 100);
 
-                          {isElite && (
+                      return (
+                        <div
+                          key={p.name}
+                          className={`trial-suspect-card ${hasVotes ? 'has-votes' : ''} ${isThresholdReached ? 'threshold-reached' : ''}`}
+                        >
+                          <div className="trial-suspect-main-row">
+                            <div className="trial-suspect-info">
+                              <span className="player-num-badge">#{idx + 1}</span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span className="trial-suspect-name">{p.name}</span>
+                                  {isClaimingMayor && (
+                                    <span className="mayor-chip-mini" title="Mayor Double Vote active">⚖ 2x</span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: isThresholdReached ? '#ef4444' : hasVotes ? 'var(--accent-gold)' : 'var(--text-dim)', fontWeight: hasVotes ? '700' : '400' }}>
+                                  {isThresholdReached
+                                    ? `⚡ THRESHOLD REACHED (${votes}/${majorityThreshold})`
+                                    : `${votes} / ${majorityThreshold} Votes`}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="trial-stepper-box">
+                              {/* Decrease Vote */}
+                              <button
+                                type="button"
+                                className="trial-stepper-btn"
+                                onClick={() => handleVoteChange(p.name, -1)}
+                                disabled={votes <= 0 || isEliminating}
+                                title={`Decrease vote for ${p.name}`}
+                              >
+                                -
+                              </button>
+
+                              {/* Vote count badge */}
+                              <span className="trial-stepper-value">
+                                {votes}
+                              </span>
+
+                              {/* Increase Vote */}
+                              <button
+                                type="button"
+                                className="trial-stepper-btn"
+                                onClick={() => handleVoteChange(p.name, 1)}
+                                disabled={isEliminating}
+                                title={`Add +1 vote for ${p.name}`}
+                              >
+                                +
+                              </button>
+
+                              {/* Elite Mayor Quick +2 Button */}
+                              {isElite && (
+                                <button
+                                  type="button"
+                                  className={`trial-stepper-btn ${isClaimingMayor ? 'is-mayor' : ''}`}
+                                  style={{ width: 'auto', padding: '0 0.5rem', fontSize: '0.75rem' }}
+                                  onClick={() => handleMayorVoteAdd(p.name)}
+                                  disabled={isEliminating}
+                                  title={`Add Mayor +2 votes for ${p.name}`}
+                                >
+                                  +2⚖
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Progress bar towards majority threshold */}
+                          <div className="trial-progress-bar-bg">
+                            <div
+                              className="trial-progress-bar-fill"
+                              style={{ width: `${progressPct}%` }}
+                            />
+                          </div>
+
+                          {/* Instant Eliminate Button when threshold reached */}
+                          {isThresholdReached && (
                             <button
                               type="button"
-                              className={`mayor-toggle-chip ${isClaimingMayor ? 'is-mayor' : ''}`}
-                              title="Toggle Mayor double voting weight"
-                              onClick={() => toggleMayorClaim(p.name)}
+                              className="btn-out-threshold"
+                              disabled={isEliminating}
+                              onClick={() => handleExecuteTrialVote(p.name)}
                             >
-                              ⚖ 2x
+                              <span>⚡ OUT {p.name.toUpperCase()} (Majority Reached!)</span>
                             </button>
                           )}
                         </div>
@@ -849,21 +972,34 @@ export function HostLobby({ initialGame, hostToken, onExit }) {
                     })}
                   </div>
 
+                  {/* Summary & Global Actions */}
                   <div className="vote-tally-summary-bar">
                     <div>
-                      Votes Cast: <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', color: 'var(--accent-gold)' }}>{totalVotesCast}</strong>
+                      Total Votes: <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '1rem', color: 'var(--accent-gold)' }}>{totalVotesCast}</strong>
                     </div>
-                    <div>
-                      Majority Needed: <strong style={{ fontFamily: 'var(--font-mono)' }}>{majorityThreshold}</strong> ({alivePlayers.length} living)
+
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      {leadingSuspect && (trialVotes[leadingSuspect.name] || 0) > 0 && (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
+                          disabled={isEliminating}
+                          onClick={() => handleExecuteTrialVote(leadingSuspect.name)}
+                        >
+                          Out {leadingSuspect.name} ({trialVotes[leadingSuspect.name]}v)
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
+                        onClick={handleResetVotes}
+                      >
+                        Clear All
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.75rem', padding: '0.3rem 0.65rem' }}
-                      onClick={resetVotes}
-                    >
-                      Clear Tally
-                    </button>
                   </div>
                 </div>
               )}
@@ -1076,6 +1212,82 @@ export function HostLobby({ initialGame, hostToken, onExit }) {
                 <span>Cancel</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Town Trial Target Verdict Announcement */}
+      {trialVerdictData && (
+        <div className="trial-verdict-overlay" onClick={() => setTrialVerdictData(null)}>
+          <div className="trial-verdict-modal" onClick={(e) => e.stopPropagation()}>
+            <div className={`verdict-banner ${trialVerdictData.is_mafia ? 'mafia-eliminated' : 'innocent-eliminated'}`}>
+              <div className={`verdict-badge ${trialVerdictData.is_mafia ? 'badge-mafia-out' : 'badge-innocent-out'}`}>
+                {trialVerdictData.is_mafia ? '🔥 TARGET ELIMINATED' : '🏛 TOWN TRIAL VERDICT'}
+              </div>
+              <h2 className={`verdict-title ${trialVerdictData.is_mafia ? 'mafia-title' : 'innocent-title'}`}>
+                {trialVerdictData.is_mafia ? 'MAFIA OUT HO GAYA!' : 'TOWN MEMBER OUT!'}
+              </h2>
+              <div className="verdict-player-name">{trialVerdictData.player_name}</div>
+              <div className="verdict-role-sub">
+                Assigned Role: <strong style={{ color: trialVerdictData.is_mafia ? '#ef4444' : '#60a5fa' }}>{trialVerdictData.role}</strong>
+              </div>
+            </div>
+
+            {/* Living Mafia Count / Radar Intel */}
+            {trialVerdictData.living_mafia_count > 0 ? (
+              <div className="verdict-radar-box">
+                <div className="radar-header">
+                  <div className="radar-pulse-dot" />
+                  <span className="radar-status-text">MAFIA STILL ALIVE</span>
+                </div>
+                <div className="radar-count-display">
+                  <span>Baqi Zinda Mafia:</span>
+                  <span className="radar-number">{trialVerdictData.living_mafia_count}</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.35rem' }}>
+                  ⚠️ {trialVerdictData.living_mafia_count} Mafia member(s) abhi bhi zinda hain! Town ko hoshiyar rehna hoga.
+                </div>
+              </div>
+            ) : (
+              <div className="verdict-radar-box" style={{ borderColor: 'rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.08)' }}>
+                <div className="radar-header">
+                  <span style={{ fontSize: '1.2rem' }}>✅</span>
+                  <span className="radar-status-text" style={{ color: '#10b981' }}>ALL MAFIA ELIMINATED</span>
+                </div>
+                <div className="radar-count-display">
+                  <span>Baqi Zinda Mafia:</span>
+                  <span className="radar-number" style={{ color: '#10b981' }}>0</span>
+                </div>
+              </div>
+            )}
+
+            {/* Game Over / Victory Conditions Banner */}
+            {trialVerdictData.game_over && (
+              <div className={`verdict-win-box ${trialVerdictData.winner === 'TOWN' ? 'town-win' : 'mafia-win'}`}>
+                <div style={{ fontSize: '2.4rem', marginBottom: '0.25rem' }}>
+                  {trialVerdictData.winner === 'TOWN' ? '🏆' : '💀'}
+                </div>
+                <h3>
+                  {trialVerdictData.winner === 'TOWN'
+                    ? 'TOWN CITIZENS WIN THE GAME!'
+                    : 'MAFIA SYNDICATE WINS THE GAME!'}
+                </h3>
+                <p style={{ fontSize: '0.9rem', margin: 0, color: 'var(--text-muted)' }}>
+                  {trialVerdictData.winner === 'TOWN'
+                    ? '🎉 Sab Mafia out ho gaye hain! Town ne game jeet liya ha!'
+                    : '💀 Mafia ne Town par qabza kar liya! Mafia game jeet gaya!'}
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ width: '100%', marginTop: '1.4rem' }}
+              onClick={() => setTrialVerdictData(null)}
+            >
+              <span>Continue Game</span>
+            </button>
           </div>
         </div>
       )}

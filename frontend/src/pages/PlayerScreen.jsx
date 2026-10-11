@@ -24,6 +24,9 @@ export function PlayerScreen({ initialGame, playerName, sessionToken, onLeave })
   // Jester Victory celebration state
   const [jesterVictoryData, setJesterVictoryData] = useState(null);
 
+  // Town Trial Verdict Announcement state
+  const [trialVerdictData, setTrialVerdictData] = useState(null);
+
   const isElite = (game.game_mode || '').toUpperCase() === 'ELITE';
 
   // Fetch public player list (names only, no roles!)
@@ -101,6 +104,7 @@ export function PlayerScreen({ initialGame, playerName, sessionToken, onLeave })
       setInvestigateResult(null);
       setInvestigationLog([]);
       setJesterVictoryData(null);
+      setTrialVerdictData(null);
       if (data.game) {
         setGame(data.game);
       } else {
@@ -115,6 +119,10 @@ export function PlayerScreen({ initialGame, playerName, sessionToken, onLeave })
         refreshPlayers();
         if (data.game) setGame(data.game);
       }
+    } else if (data.type === 'TOWN_TRIAL_RESULT') {
+      sounds.playDramaticReveal();
+      setTrialVerdictData(data);
+      refreshPlayers();
     } else if (data.type === 'PLAYER_STATUS_UPDATED') {
       if (data.player_name?.toLowerCase() === playerName?.toLowerCase()) {
         setRoleInfo((prev) => (prev ? { ...prev, is_alive: data.is_alive, elimination_reason: data.reason } : prev));
@@ -491,6 +499,82 @@ export function PlayerScreen({ initialGame, playerName, sessionToken, onLeave })
               onClick={() => setJesterVictoryData(null)}
             >
               <span>Acknowledge Victory</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Town Trial Target Verdict Announcement */}
+      {trialVerdictData && (
+        <div className="trial-verdict-overlay" onClick={() => setTrialVerdictData(null)}>
+          <div className="trial-verdict-modal" onClick={(e) => e.stopPropagation()}>
+            <div className={`verdict-banner ${trialVerdictData.is_mafia ? 'mafia-eliminated' : 'innocent-eliminated'}`}>
+              <div className={`verdict-badge ${trialVerdictData.is_mafia ? 'badge-mafia-out' : 'badge-innocent-out'}`}>
+                {trialVerdictData.is_mafia ? '🔥 TARGET ELIMINATED' : '🏛 TOWN TRIAL VERDICT'}
+              </div>
+              <h2 className={`verdict-title ${trialVerdictData.is_mafia ? 'mafia-title' : 'innocent-title'}`}>
+                {trialVerdictData.is_mafia ? 'MAFIA OUT HO GAYA!' : 'TOWN MEMBER OUT!'}
+              </h2>
+              <div className="verdict-player-name">{trialVerdictData.player_name}</div>
+              <div className="verdict-role-sub">
+                Assigned Role: <strong style={{ color: trialVerdictData.is_mafia ? '#ef4444' : '#60a5fa' }}>{trialVerdictData.role}</strong>
+              </div>
+            </div>
+
+            {/* Living Mafia Count / Radar Intel */}
+            {trialVerdictData.living_mafia_count > 0 ? (
+              <div className="verdict-radar-box">
+                <div className="radar-header">
+                  <div className="radar-pulse-dot" />
+                  <span className="radar-status-text">MAFIA STILL ALIVE</span>
+                </div>
+                <div className="radar-count-display">
+                  <span>Baqi Zinda Mafia:</span>
+                  <span className="radar-number">{trialVerdictData.living_mafia_count}</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.35rem' }}>
+                  ⚠️ {trialVerdictData.living_mafia_count} Mafia member(s) abhi bhi zinda hain! Town ko hoshiyar rehna hoga.
+                </div>
+              </div>
+            ) : (
+              <div className="verdict-radar-box" style={{ borderColor: 'rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.08)' }}>
+                <div className="radar-header">
+                  <span style={{ fontSize: '1.2rem' }}>✅</span>
+                  <span className="radar-status-text" style={{ color: '#10b981' }}>ALL MAFIA ELIMINATED</span>
+                </div>
+                <div className="radar-count-display">
+                  <span>Baqi Zinda Mafia:</span>
+                  <span className="radar-number" style={{ color: '#10b981' }}>0</span>
+                </div>
+              </div>
+            )}
+
+            {/* Game Over / Victory Conditions Banner */}
+            {trialVerdictData.game_over && (
+              <div className={`verdict-win-box ${trialVerdictData.winner === 'TOWN' ? 'town-win' : 'mafia-win'}`}>
+                <div style={{ fontSize: '2.4rem', marginBottom: '0.25rem' }}>
+                  {trialVerdictData.winner === 'TOWN' ? '🏆' : '💀'}
+                </div>
+                <h3>
+                  {trialVerdictData.winner === 'TOWN'
+                    ? 'TOWN CITIZENS WIN THE GAME!'
+                    : 'MAFIA SYNDICATE WINS THE GAME!'}
+                </h3>
+                <p style={{ fontSize: '0.9rem', margin: 0, color: 'var(--text-muted)' }}>
+                  {trialVerdictData.winner === 'TOWN'
+                    ? '🎉 Sab Mafia out ho gaye hain! Town ne game jeet liya ha!'
+                    : '💀 Mafia ne Town par qabza kar liya! Mafia game jeet gaya!'}
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ width: '100%', marginTop: '1.4rem' }}
+              onClick={() => setTrialVerdictData(null)}
+            >
+              <span>Continue Game</span>
             </button>
           </div>
         </div>
